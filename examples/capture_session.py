@@ -36,6 +36,15 @@ def main():
     print("Keep this file private - it is a live, replayable login session "
           "for your LCSC account. Do not commit it.")
 
+    print()
+    print("Confirming the saved session works via plain requests (no browser)...")
+    if session.check_valid():
+        print("Confirmed - this session file can now be copied anywhere "
+              "(e.g. to a headless server) and used with plain requests.")
+    else:
+        print("Unexpected: check_valid() came back False immediately after "
+              "capture. Something's off - please report this.")
+
 
 if __name__ == "__main__":
     main()

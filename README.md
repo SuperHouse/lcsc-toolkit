@@ -69,11 +69,43 @@ for line in detail.line_items:
 See `examples/capture_session.py` and `examples/list_recent_orders.py` for
 runnable versions of the above.
 
-There's no automated way to detect a session has expired ahead of time.
-`OrdersClient` calls raise `lcsc_toolkit.errors.LcscApiError` if something
-goes wrong, which is your cue to run session capture again. How long a
-session actually stays valid before that happens hasn't been characterised
-yet.
+Check whether a session is actually still logged in with `check_valid()`
+(or `OrdersClient.check_session()`, an identical passthrough) - a single
+lightweight authenticated request, useful right after loading a session
+you didn't just capture yourself, before trusting it in a script:
+
+```python
+if not session.check_valid():
+    raise SystemExit("Session expired - run capture_session.py again")
+```
+
+Beyond that, there's no automated way to detect a session has expired ahead
+of time. `OrdersClient` calls raise `lcsc_toolkit.errors.LcscApiError` if
+something goes wrong, which is your cue to check the session and probably
+re-capture it. How long a session actually stays valid in the first place
+hasn't been characterised yet.
+
+## Running on a headless server
+
+Interactive login (`capture_interactively()`) needs a real, visible browser
+window, which a headless server doesn't have. The fix is to split
+capture and use across two machines:
+
+1. Run `examples/capture_session.py` on any machine with a display (your
+   desktop) to log in and produce a session file.
+2. Copy that file to the server.
+3. On the server, `LcscSession.load(...)` + `OrdersClient` - this only
+   needs `requests`, not Playwright, so the server never needs the `[auth]`
+   extra or a browser at all.
+
+This works because the session is just cookies - there's nothing browser-
+or machine-specific baked into them. **Confirmed working**: a session
+captured on a desktop, copied to a separate remote machine on a different
+network, authenticated successfully there - so LCSC does not appear to tie
+the session to the originating IP address. Still, run `check_valid()`
+right after copying a session file over, before wiring anything up to run
+unattended, as routine confirmation for your own setup - one confirmed
+pair of machines isn't a guarantee for every network/hosting environment.
 
 ## Findings: how LCSC's order API works
 
@@ -99,6 +131,9 @@ LCSC documentation.
 - **Session cookies work via plain `requests`, no browser needed
   post-login** - confirmed by replaying both endpoints above with just the
   saved cookies and getting the same data back as the browser did.
+- **Sessions are portable across machines/networks** - a session captured
+  on one machine, copied to a separate remote machine, authenticated
+  successfully from there. See Running on a headless server, above.
 
 ## Open questions
 
@@ -110,9 +145,10 @@ unattended (e.g. a scheduled sync):
   re-authentication some other way. There's no refresh-token equivalent
   to automate that, unlike an OAuth-based API.
 - **What does an expired-session response actually look like?** (HTTP
-  status, or a `code`/`msg` in the body?) `OrdersClient`
-  doesn't try to detect this specifically yet, it just reports whatever
-  LCSC returns.
+  status, or a `code`/`msg` in the body?) Not yet observed against a real
+  expired session - `check_valid()` (see above) only trusts the one shape
+  confirmed for a *valid* session and raises for anything else, rather than
+  assuming what "expired" looks like.
 - Whether there's a lighter-weight way to keep a session alive (e.g.
   periodic no-op requests) versus needing a fresh interactive login each
   time it lapses.
@@ -123,9 +159,10 @@ unattended (e.g. a scheduled sync):
 src/lcsc_toolkit/
 ├── errors.py           # LcscToolkitError, LcscApiError, SessionExpiredError
 └── orders/
-    ├── session.py       # LcscSession: capture/save/load a login session
-    ├── client.py        # OrdersClient: list_orders(), iter_orders(), get_order_detail()
-    └── types.py         # OrderSummary, OrdersPage, OrderLineItem, OrderDetail
+    ├── session.py       # LcscSession: capture/save/load a login session, check_valid()
+    ├── client.py        # OrdersClient: list_orders(), iter_orders(), get_order_detail(), check_session()
+    ├── types.py         # OrderSummary, OrdersPage, OrderLineItem, OrderDetail
+    └── _http.py         # shared BASE_URL/headers for the wmsc.lcsc.com API
 examples/
 ├── capture_session.py   # interactive login capture (needs the [auth] extra)
 ├── list_recent_orders.py  # minimal usage example of the confirmed API

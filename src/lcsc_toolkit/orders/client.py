@@ -14,18 +14,8 @@ import time
 import requests
 
 from lcsc_toolkit.errors import LcscApiError
+from lcsc_toolkit.orders._http import BASE_URL, DEFAULT_HEADERS
 from lcsc_toolkit.orders.types import OrderDetail, OrdersPage
-
-BASE_URL = "https://wmsc.lcsc.com"
-
-DEFAULT_HEADERS = {
-    "user-agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "accept": "application/json, text/plain, */*",
-}
 
 # LCSC gets the most conservative pacing of any supplier this toolkit's
 # sibling project talks to, since this is an unofficial client hitting a
@@ -48,11 +38,20 @@ class OrdersClient:
     """
 
     def __init__(self, session, *, min_request_interval=DEFAULT_MIN_REQUEST_INTERVAL):
+        self._session = session
         self._http = requests.Session()
         self._http.cookies = session.to_requests_cookiejar()
         self._http.headers.update(DEFAULT_HEADERS)
         self._min_request_interval = min_request_interval
         self._last_request_time = 0.0
+
+    def check_session(self, *, timeout=15):
+        """Convenience passthrough to `LcscSession.check_valid()` - see
+        there for exact semantics. Handy right after loading a session you
+        just copied from another machine (e.g. captured interactively on a
+        desktop, copied to a headless server), before trusting it in an
+        unattended script."""
+        return self._session.check_valid(timeout=timeout)
 
     def _respect_rate_limit(self):
         elapsed = time.monotonic() - self._last_request_time

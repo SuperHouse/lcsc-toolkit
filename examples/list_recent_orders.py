@@ -38,11 +38,19 @@ def main():
     client = OrdersClient(session)
 
     try:
+        session_ok = client.check_session()
+    except LcscApiError as exc:
+        print(f"Couldn't check session validity: {exc}")
+        sys.exit(1)
+
+    if not session_ok:
+        print("Session is not logged in - run examples/capture_session.py again.")
+        sys.exit(1)
+
+    try:
         page = client.list_orders(page_size=order_count)
     except LcscApiError as exc:
         print(f"Failed to list orders: {exc}")
-        print("The session may have expired - try running "
-              "examples/capture_session.py again.")
         sys.exit(1)
 
     print(f"{page.total_row} order(s) total, showing the {len(page.orders)} most recent:")
