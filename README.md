@@ -1,10 +1,11 @@
 # lcsc-toolkit
 
-An unofficial Python client for [LCSC](https://www.lcsc.com): authenticated
-order history, and public product search.
+An unofficial Python client for [LCSC](https://www.lcsc.com) that supports 
+product search using the public site, and authenticated order history by 
+logging in as a specific account.
 
-WARNING: Everything here is reverse-engineered from what LCSC's site calls 
-internally, and may break without notice!
+WARNING: Everything here is reverse-engineered from LCSC's site, and may 
+break without notice!
 
 This library was created as part of the 
 [Testomatic PCBA Register](https://github.com/superhouse/register) 
@@ -91,7 +92,7 @@ if not session.check_valid():
     raise SystemExit("Session expired - run capture_session.py again")
 ```
 
-Beyond that, there's no automated way to detect a session has expired ahead
+There's no automated way to detect a session has expired ahead
 of time. `OrdersClient` calls raise `lcsc_toolkit.errors.LcscApiError` if
 something goes wrong, which is your cue to check the session and probably
 re-capture it. How long a session actually stays valid in the first place
@@ -121,8 +122,7 @@ unattended, as confirmation for your own setup.
 
 ## Product search
 
-No login, no session, no `[auth]` extra - `SearchClient` is plain
-`requests` from the start:
+No login or session required. `SearchClient` is simple page loads.
 
 ```python
 from lcsc_toolkit.search import SearchClient
@@ -199,11 +199,11 @@ LCSC documentation so YMMV.
 Not yet answered, and worth knowing before relying on this for anything
 unattended (e.g. a scheduled sync). All of these are specific to `orders`:
 
-- **How long does a captured session actually stay valid?** If it's
+- **How long does a captured session stay valid?** If it's
   short-lived, a scheduled/unattended sync isn't practical without solving
   re-authentication some other way. There's no refresh-token equivalent
   to automate that, unlike an OAuth-based API.
-- **What does an expired-session response actually look like?** (HTTP
+- **What does an expired-session response look like?** (HTTP
   status, or a `code`/`msg` in the body?) Not yet observed against a real
   expired session: `check_valid()` (see above) only trusts the one shape
   confirmed for a *valid* session and raises for anything else, rather than
@@ -220,7 +220,7 @@ src/lcsc_toolkit/
 ├── orders/
 │   ├── session.py        # LcscSession: capture/save/load a login session, check_valid()
 │   ├── client.py         # OrdersClient: list_orders(), iter_orders(), get_order_detail(), check_session()
-│   ├── types.py          # OrderSummary, OrdersPage, OrderLineItem, OrderDetail
+│   ├── types.py          # OrderSummary, OrdersPage, OrderLineItem, OrderDetail (line items and orders both expose a stable `uuid`; OrderSummary/OrderDetail have `detail_url`)
 │   └── _http.py          # shared BASE_URL/headers for the wmsc.lcsc.com API
 └── search/
     ├── client.py         # SearchClient: search() (no login required)

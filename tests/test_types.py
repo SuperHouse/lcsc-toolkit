@@ -1,4 +1,4 @@
-from lcsc_toolkit.orders.types import OrderDetail, OrdersPage
+from lcsc_toolkit.orders.types import OrderDetail, OrderSummary, OrdersPage
 
 
 def _raw_order_row(**overrides):
@@ -29,6 +29,7 @@ def _raw_orders_page(rows):
 
 def _raw_line_item(**overrides):
     item = {
+        "uuid": "LINE-UUID1",
         "productCode": "C12345",
         "productMpn": "ABC-123",
         "description": "Widget",
@@ -83,3 +84,21 @@ def test_order_detail_from_api_keeps_raw_payload():
     detail = OrderDetail.from_api(raw)
 
     assert detail.raw == raw
+
+
+def test_order_line_item_from_api_parses_uuid():
+    detail = OrderDetail.from_api(_raw_order_detail([_raw_line_item(uuid="LINE-UUID2")]))
+
+    assert detail.line_items[0].uuid == "LINE-UUID2"
+
+
+def test_order_summary_detail_url_built_from_uuid():
+    order = OrderSummary.from_api(_raw_order_row(uuid="UUID99"))
+
+    assert order.detail_url == "https://www.lcsc.com/personalCenter/order/detail?id=UUID99"
+
+
+def test_order_detail_detail_url_built_from_uuid():
+    detail = OrderDetail.from_api(_raw_order_detail([]))
+
+    assert detail.detail_url == "https://www.lcsc.com/personalCenter/order/detail?id=UUID1"

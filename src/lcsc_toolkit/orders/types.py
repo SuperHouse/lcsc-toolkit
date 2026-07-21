@@ -25,6 +25,10 @@ class OrderSummary:
     express_type: str
     raw: dict = field(repr=False, default_factory=dict)
 
+    @property
+    def detail_url(self):
+        return f"https://www.lcsc.com/personalCenter/order/detail?id={self.uuid}"
+
     @classmethod
     def from_api(cls, data):
         return cls(
@@ -66,8 +70,18 @@ class OrdersPage:
 
 @dataclass
 class OrderLineItem:
-    """One entry from OrderDetail.line_items (LCSC's `orderProductVOList`)."""
+    """One entry from OrderDetail.line_items (LCSC's `orderProductVOList`).
 
+    `uuid` is a stable per-line identifier - unlike `Product.product_code`,
+    which isn't unique within an order (the same SKU can appear as more
+    than one line), this is what a consumer should key off to track a line
+    across resyncs. Also present but deliberately not modeled here yet:
+    `shippedQuantity`/`toShipQuantity`, which would allow per-line shipped
+    status rather than only an order-level one - left as a future addition
+    since nothing currently needs it.
+    """
+
+    uuid: str
     product_code: str
     product_mpn: str
     description: str
@@ -81,6 +95,7 @@ class OrderLineItem:
     @classmethod
     def from_api(cls, data):
         return cls(
+            uuid=data.get("uuid"),
             product_code=data.get("productCode"),
             product_mpn=data.get("productMpn"),
             description=data.get("description"),
@@ -95,7 +110,13 @@ class OrderLineItem:
 
 @dataclass
 class OrderDetail:
-    """The result of GET /wmsc/order/detail - see OrdersClient.get_order_detail()."""
+    """The result of GET /wmsc/order/detail - see OrdersClient.get_order_detail().
+
+    Deliberately doesn't model a currency field, even though the raw
+    response has one (`currencyType`/`currencySymbol`) - a consumer that
+    already called list_orders() to get here has an `OrderSummary` with
+    `currency_type` for the same order, so there's no need to duplicate it.
+    """
 
     uuid: str
     order_code: str
@@ -105,6 +126,10 @@ class OrderDetail:
     express_type: str
     line_items: list
     raw: dict = field(repr=False, default_factory=dict)
+
+    @property
+    def detail_url(self):
+        return f"https://www.lcsc.com/personalCenter/order/detail?id={self.uuid}"
 
     @classmethod
     def from_api(cls, data):
