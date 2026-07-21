@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lcsc-toolkit"
+version = "0.1.0"
+description = "Unofficial Python client for LCSC.com, with support for accessing order history with authentication"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [{ name = "Jonathan Oxer" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+auth = ["playwright>=1.40"]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/superhouse/lcsc-toolkit"
+Issues = "https://github.com/superhouse/lcsc-toolkit/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lcsc_toolkit"]

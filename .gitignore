@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+env/
+.DS_Store
+
+# Captured LCSC login sessions and diagnostic output are live credentials
+# and real account data - never commit them.
+.lcsc_session/
