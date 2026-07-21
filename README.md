@@ -1,26 +1,32 @@
 # lcsc-toolkit
 
-An unofficial Python client for [LCSC](https://www.lcsc.com), with authenticated
-order history. LCSC does not publish a public API for this. Everything
-here is reverse-engineered from what LCSC's own website calls internally,
-and may break without notice.
+An unofficial Python client for [LCSC](https://www.lcsc.com): authenticated
+order history, and public product search.
 
-**Status: alpha.** Order history (list + detail) is implemented and has
-been confirmed to work. Nothing else yet.
+WARNING: Everything here is reverse-engineered from what LCSC's site calls 
+internally, and may break without notice!
+
+This library was created as part of the 
+[Testomatic PCBA Register](https://github.com/superhouse/register) 
+PCB testing and assembly management system, but doesn't depend on it.
 
 ## Disclaimer
 
 - This is **not affiliated with, endorsed by, or supported by LCSC** in any
   way.
-- It works by replaying the same internal API calls LCSC's own website
-  makes while you're logged in. Automated access to a logged-in account
-  area may fall outside LCSC's terms of service. You need to think carefully
-  before using this with your actual LCSC account!
-- There is no LCSC sandbox/staging environment. The endpoints this relies
-  on could change shape or disappear at any time, and repeated automated
-  access could trigger LCSC's bot detection and affect your account, not
-  just your script.
-- Just in case it wasn't clear: USE AT YOUR OWN RISK!
+- Both modules work by replaying internal API calls LCSC's own website
+  makes: `lcsc_toolkit.search` is the same public search box anyone gets
+  without logging in, `lcsc_toolkit.orders` are the ones made while logged 
+  in to *your* account. The order-history side is the one with real account
+  risk: automated access to a logged-in account area may fall outside
+  LCSC's terms of service. Think carefully before using it against your
+  actual account. `search` isn't as risky because it's the same data
+  everyone gets while browsing the site anonymously.
+- There is no LCSC sandbox/staging environment. The endpoints this toolkit 
+  module relies on could change or disappear at any time. For
+  `orders`, repeated automated access could also trigger LCSC's bot
+  detection and affect your account.
+- Just in case I haven't been clear enough yet: USE AT YOUR OWN RISK!
 
 ## Install
 
@@ -30,9 +36,10 @@ pip install lcsc-toolkit[auth]    # + Playwright, needed only for interactive lo
 playwright install chromium       # if you installed the [auth] extra
 ```
 
-Not on PyPI yet. For now, install from a local checkout with `pip install -e .`
+Install from PyPI using `pip install lcsc-toolkit`, or install from a local 
+checkout with `pip install -e .`
 
-## How authentication works
+## Order history
 
 LCSC has no OAuth-style API key or refresh-token flow for this. You log in
 to lcsc.com like a normal user, including any CAPTCHA/2FA, and the library
@@ -69,6 +76,11 @@ for line in detail.line_items:
 See `examples/capture_session.py` and `examples/list_recent_orders.py` for
 runnable versions of the above.
 
+You can start by running the `capture_session.py` example which will 
+attempt to launch a browser on your computer for you to log in to LCSC 
+and then write the session cookie to disk, then run `list_recent_orders.py` 
+to verify that it successfully connects to LCSC using the saved cookie.
+
 Check whether a session is actually still logged in with `check_valid()`
 (or `OrdersClient.check_session()`, an identical passthrough) - a single
 lightweight authenticated request, useful right after loading a session
@@ -83,7 +95,8 @@ Beyond that, there's no automated way to detect a session has expired ahead
 of time. `OrdersClient` calls raise `lcsc_toolkit.errors.LcscApiError` if
 something goes wrong, which is your cue to check the session and probably
 re-capture it. How long a session actually stays valid in the first place
-hasn't been characterised yet.
+hasn't been worked out yet and may be unpredictable, depending on what 
+LCSC do with their servers: reboots, garbage cleanup, etc.
 
 ## Running on a headless server
 
@@ -98,20 +111,42 @@ capture and use across two machines:
    needs `requests`, not Playwright, so the server never needs the `[auth]`
    extra or a browser at all.
 
-This works because the session is just cookies - there's nothing browser-
+This works because the session is just cookies. There's nothing browser-
 or machine-specific baked into them. **Confirmed working**: a session
 captured on a desktop, copied to a separate remote machine on a different
-network, authenticated successfully there - so LCSC does not appear to tie
+network, authenticated successfully there. LCSC does not appear to tie
 the session to the originating IP address. Still, run `check_valid()`
 right after copying a session file over, before wiring anything up to run
-unattended, as routine confirmation for your own setup - one confirmed
-pair of machines isn't a guarantee for every network/hosting environment.
+unattended, as confirmation for your own setup.
 
-## Findings: how LCSC's order API works
+## Product search
+
+No login, no session, no `[auth]` extra - `SearchClient` is plain
+`requests` from the start:
+
+```python
+from lcsc_toolkit.search import SearchClient
+
+client = SearchClient()
+product = client.search("C17179461")  # SKU or manufacturer part number
+
+if product:
+    print(product.product_model, product.stock_number, product.detail_url)
+    for pb in product.price_breaks:
+        print(pb.quantity, pb.price, pb.currency)
+else:
+    print("No match")
+```
+
+`search()` returns `None` for no match, a `Product` otherwise. Errors
+(request failures, unexpected response shapes) raise
+`lcsc_toolkit.errors.LcscApiError`, same as `orders`.
+
+## How LCSC's order API works
 
 Discovered by watching personalCenter/order/list's own network traffic
 while logged in (see `examples/explore_network.py`), not from any published
-LCSC documentation.
+LCSC documentation so YMMV.
 
 - **List**: `GET https://wmsc.lcsc.com/wmsc/order/page`, query params
   `queryType`, `createStartTime`, `createEndTime`, `productMpn`, `keyword`,
@@ -119,26 +154,50 @@ LCSC documentation.
   Response: `{"code":200,"result":{"currPage","pageRow","totalPage",
   "totalRow","dataList":[{"uuid","orderCode","webOrderStatus",
   "paymentStatus","orderAmount","currencyType","createTime","trackingCode",
-  "expressType",...}]}}`. `orderCode` (e.g. `WM2607080353`) is the
+  "expressType",...}]}}`. `orderCode` (eg: `WM2607080353`) is the
   human-readable order number; `uuid` is what the detail endpoint needs.
 - **Detail**: `GET https://wmsc.lcsc.com/wmsc/order/detail?orderUuId=<uuid>`
   - note the param name (`orderUuId`) doesn't match the list row's field
   name (`uuid`) or casing. Result includes order-level fields plus
   **`orderProductVOList`**, the line items: `productCode` (LCSC's own SKU,
-  e.g. `C17179461`), `productMpn`, `description`, `purchaseQuantity`,
+  eg: `C17179461`), `productMpn`, `description`, `purchaseQuantity`,
   `unitPrice` (pre-discount list price), `realPrice` (the actual per-unit
   price paid), `totalPrice`/`realTotalAmount`.
 - **Session cookies work via plain `requests`, no browser needed
-  post-login** - confirmed by replaying both endpoints above with just the
+  post-login**. Confirmed by replaying both endpoints above with just the
   saved cookies and getting the same data back as the browser did.
-- **Sessions are portable across machines/networks** - a session captured
+- **Sessions are portable across machines/networks**. A session captured
   on one machine, copied to a separate remote machine, authenticated
   successfully from there. See Running on a headless server, above.
+
+## How LCSC's search API works
+
+- **Search**: `POST https://wmsc.lcsc.com/ftps/wm/search/v3/global`, JSON
+  body `{keyword, secondKeyword, brandIdList, catalogIdList, isStock,
+  isAsianBrand, isDeals, isEnvironment}`. Response `result.scene` is either
+  `FULL_MATCH` (product is `result.exactMatchResult[0]`) or
+  `REDIRECT_PRODUCT_DETAIL` (search didn't resolve to one exact product:
+  see below).
+- **Product detail fallback**: on `REDIRECT_PRODUCT_DETAIL`,
+  `result.tipProductDetailUrlVO.productCode` identifies a product page at
+  `https://www.lcsc.com/product-detail/<productCode>.html`, but that's an
+  HTML page, not a JSON API. The data is embedded in a
+  `<script id="__NEXT_DATA__">` tag as JSON (`props.pageProps.webData`).
+  `SearchClient` fetches that page and regex-extracts the blob rather than
+  parsing HTML properly, since the actual product data is just JSON
+  sitting inside a `<script>` tag. Falls back to the (much sparser) `tip`
+  object itself if that data isn't there or `dataIsNull` is true.
+- **Pricing**: `productPriceList` entries (`{ladder, discountPrice}`) map
+  to price-break quantity/price pairs. Like orders, LCSC's search API only
+  ever returns a `"$"` symbol, not an ISO currency code, so currency is
+  assumed `USD`.
+- No authentication of any kind: confirmed by this being the same data
+  visiting lcsc.com and searching anonymously returns.
 
 ## Open questions
 
 Not yet answered, and worth knowing before relying on this for anything
-unattended (e.g. a scheduled sync):
+unattended (e.g. a scheduled sync). All of these are specific to `orders`:
 
 - **How long does a captured session actually stay valid?** If it's
   short-lived, a scheduled/unattended sync isn't practical without solving
@@ -146,7 +205,7 @@ unattended (e.g. a scheduled sync):
   to automate that, unlike an OAuth-based API.
 - **What does an expired-session response actually look like?** (HTTP
   status, or a `code`/`msg` in the body?) Not yet observed against a real
-  expired session - `check_valid()` (see above) only trusts the one shape
+  expired session: `check_valid()` (see above) only trusts the one shape
   confirmed for a *valid* session and raises for anything else, rather than
   assuming what "expired" looks like.
 - Whether there's a lighter-weight way to keep a session alive (e.g.
@@ -157,16 +216,19 @@ unattended (e.g. a scheduled sync):
 
 ```
 src/lcsc_toolkit/
-├── errors.py           # LcscToolkitError, LcscApiError, SessionExpiredError
-└── orders/
-    ├── session.py       # LcscSession: capture/save/load a login session, check_valid()
-    ├── client.py        # OrdersClient: list_orders(), iter_orders(), get_order_detail(), check_session()
-    ├── types.py         # OrderSummary, OrdersPage, OrderLineItem, OrderDetail
-    └── _http.py         # shared BASE_URL/headers for the wmsc.lcsc.com API
+├── errors.py             # LcscToolkitError, LcscApiError, SessionExpiredError
+├── orders/
+│   ├── session.py        # LcscSession: capture/save/load a login session, check_valid()
+│   ├── client.py         # OrdersClient: list_orders(), iter_orders(), get_order_detail(), check_session()
+│   ├── types.py          # OrderSummary, OrdersPage, OrderLineItem, OrderDetail
+│   └── _http.py          # shared BASE_URL/headers for the wmsc.lcsc.com API
+└── search/
+    ├── client.py         # SearchClient: search() (no login required)
+    └── types.py          # Product, PriceBreak
 examples/
-├── capture_session.py   # interactive login capture (needs the [auth] extra)
-├── list_recent_orders.py  # minimal usage example of the confirmed API
-└── explore_network.py   # diagnostic tool for discovering further endpoints
+├── capture_session.py    # interactive login capture (needs the [auth] extra)
+├── list_recent_orders.py # minimal usage example of the confirmed order-history API
+└── explore_network.py    # diagnostic tool for discovering further order-related endpoints
 tests/
 ```
 

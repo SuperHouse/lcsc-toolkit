@@ -5,17 +5,17 @@ build-backend = "hatchling.build"
 [project]
 name = "lcsc-toolkit"
 version = "0.1.0"
-description = "Unofficial Python client for LCSC.com, with support for accessing order history with authentication"
+description = "Unofficial Python client for LCSC with product search and authenticated order history"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [{ name = "Jonathan Oxer" }]
 classifiers = [
-    "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
 ]
 dependencies = [
     "requests>=2.28",
