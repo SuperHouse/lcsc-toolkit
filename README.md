@@ -93,9 +93,26 @@ if not session.check_valid():
 ```
 
 There's no automated way to detect a session has expired ahead
-of time. `OrdersClient` calls raise `lcsc_toolkit.errors.LcscApiError` if
-something goes wrong, which is your cue to check the session and probably
-re-capture it. How long a session actually stays valid in the first place
+of time. When an `OrdersClient` call finds that the session has expired,
+it raises `lcsc_toolkit.errors.SessionExpiredError`. The fix is to capture
+a new session:
+
+```python
+from lcsc_toolkit.errors import LcscApiError, SessionExpiredError
+
+try:
+    page = client.list_orders()
+except SessionExpiredError:
+    raise SystemExit("Session expired - run capture_session.py again")
+except LcscApiError as exc:
+    raise SystemExit(f"LCSC request failed: {exc}")
+```
+
+`SessionExpiredError` is a subclass of `LcscApiError`, so code that only
+catches `LcscApiError` still catches it. Other failures raise a plain
+`LcscApiError`; if one persists, check the session with `check_valid()`
+too, since only one form of expiry has been confirmed so far (see Open
+questions below). How long a session actually stays valid in the first place
 hasn't been worked out yet and may be unpredictable, depending on what 
 LCSC do with their servers: reboots, garbage cleanup, etc.
 
@@ -203,11 +220,20 @@ unattended (e.g. a scheduled sync). All of these are specific to `orders`:
   short-lived, a scheduled/unattended sync isn't practical without solving
   re-authentication some other way. There's no refresh-token equivalent
   to automate that, unlike an OAuth-based API.
-- **What does an expired-session response look like?** (HTTP
-  status, or a `code`/`msg` in the body?) Not yet observed against a real
-  expired session: `check_valid()` (see above) only trusts the one shape
-  confirmed for a *valid* session and raises for anything else, rather than
-  assuming what "expired" looks like.
+- **What does an expired-session response look like?** *Partly answered
+  (2026-10-13).* Observed once, in production use: an expired session made
+  the order-list endpoint (`/wmsc/order/page`) return **HTTP 200** with a
+  JSON body whose `code` was **`302`** and whose `msg` was empty. Capturing
+  a new session fixed it. `OrdersClient` now raises `SessionExpiredError`
+  for `code` 302 from any order endpoint. Still unconfirmed:
+  - whether `code` 302 always means "session expired" (one observation
+    only, though no other meaning has been seen);
+  - whether the order-detail endpoint reports expiry the same way (assumed
+    so, not observed);
+  - what `check_valid()`'s login-check endpoint returns for an expired
+    session. `check_valid()` is unchanged: it still raises `LcscApiError`
+    ("couldn't determine") for anything except the confirmed valid-session
+    shape, rather than assuming expiry looks the same there.
 - Whether there's a lighter-weight way to keep a session alive (e.g.
   periodic no-op requests) versus needing a fresh interactive login each
   time it lapses.

@@ -17,10 +17,17 @@ class LcscApiError(LcscToolkitError):
         self.payload = payload
 
 
-class SessionExpiredError(LcscToolkitError):
+class SessionExpiredError(LcscApiError):
     """Raised when the saved session no longer authenticates.
 
     LCSC has no automated re-login flow (no refresh token, unlike DigiKey's
     OAuth) - recovering from this means running the interactive login
     capture again.
+
+    Subclasses LcscApiError so that code written to catch LcscApiError
+    (the only error OrdersClient raised before this was introduced) still
+    catches an expired session.
+
+    Currently raised by OrdersClient when an order endpoint returns LCSC's
+    JSON `code` 302 - see orders/client.py for what's confirmed about it.
     """

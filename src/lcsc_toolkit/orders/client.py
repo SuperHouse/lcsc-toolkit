@@ -13,7 +13,7 @@ import time
 
 import requests
 
-from lcsc_toolkit.errors import LcscApiError
+from lcsc_toolkit.errors import LcscApiError, SessionExpiredError
 from lcsc_toolkit.orders._http import BASE_URL, DEFAULT_HEADERS
 from lcsc_toolkit.orders.types import OrderDetail, OrdersPage
 
@@ -21,6 +21,13 @@ from lcsc_toolkit.orders.types import OrderDetail, OrdersPage
 # sibling project talks to, since this is an unofficial client hitting a
 # logged-in account area rather than a published API.
 DEFAULT_MIN_REQUEST_INTERVAL = 3.0
+
+# LCSC's JSON `code` for an expired session. Observed (2026-10-13) as an
+# HTTP 200 response from /wmsc/order/page whose body had code=302 and an
+# empty msg, with an old session; capturing a new session fixed it. Only
+# seen once, and only from the order-list endpoint, but no other meaning
+# for code=302 has been seen either.
+SESSION_EXPIRED_CODE = 302
 
 
 class OrdersClient:
@@ -75,6 +82,13 @@ class OrdersClient:
             )
 
         payload = response.json()
+        if payload.get("code") == SESSION_EXPIRED_CODE:
+            raise SessionExpiredError(
+                f"LCSC session has expired ({path} returned code={SESSION_EXPIRED_CODE}) - "
+                "capture a new session and replace the saved session file",
+                status_code=response.status_code,
+                payload=payload,
+            )
         if payload.get("code") != 200:
             raise LcscApiError(
                 f"{path} returned code={payload.get('code')}: {payload.get('msg')}",

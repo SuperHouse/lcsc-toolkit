@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lcsc-toolkit"
-version = "0.2.0"
+version = "0.3.0"
 description = "Unofficial Python client for LCSC with product search and authenticated order history"
 readme = "README.md"
 license = "MIT"
